@@ -11,13 +11,25 @@ import time
 import pandas as pd
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 import logging
-from config import TWITTER_AUTH_TOKEN
+import os
+from dotenv import load_dotenv
 
+# 加载.env文件中的环境变量，但不覆盖已存在的环境变量
+load_dotenv(override=False)
+
+# 从环境变量中获取配置
+TWITTER_AUTH_TOKEN = os.getenv('TWITTER_AUTH_TOKEN')
+START_DATE = os.getenv('START_DATE', '2023-01-01')
+END_DATE = os.getenv('END_DATE', '2023-01-02')
+TWITTER_URL = os.getenv('TWITTER_URL', 'https://x.com/search?q=(from%3Aelonmusk)%20until%3A2023-01-02%20since%3A2023-01-01&src=typed_query&f=live')
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# 确保数据目录存在
+os.makedirs('data', exist_ok=True)
 
 
 class TwitterExtractor:
@@ -29,12 +41,12 @@ class TwitterExtractor:
         options = Options()
         options.headless = headless
         driver = webdriver.Chrome(options=options)
-        driver.get("https://twitter.com")
+        driver.get("https://x.com")
         return driver
 
     def set_token(self, auth_token=TWITTER_AUTH_TOKEN):
         if not auth_token or auth_token == "YOUR_TWITTER_AUTH_TOKEN_HERE":
-            raise ValueError("Access token is missing. Please configure it properly.")
+            raise ValueError("访问令牌缺失。请正确配置它。")
         expiration = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
         cookie_script = f"document.cookie = 'auth_token={auth_token}; expires={expiration}; path=/';"
         self.driver.execute_script(cookie_script)
@@ -43,7 +55,7 @@ class TwitterExtractor:
         self.driver.get(page_url)
         cur_filename = f"data/tweets_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 
-        # Convert start_date and end_date from "YYYY-MM-DD" to datetime objects
+        # 将start_date和end_date从"YYYY-MM-DD"转换为datetime对象
         start_date = datetime.strptime(start_date, "%Y-%m-%d")
         end_date = datetime.strptime(end_date, "%Y-%m-%d")
 
@@ -58,9 +70,9 @@ class TwitterExtractor:
                     date = datetime.strptime(row["date"], "%Y-%m-%d")
 
                 except ValueError as e:
-                    # infer date format
+                    # 推断日期格式
                     logger.info(
-                        f"Value error on date format, trying another format.{row['date']}",
+                        f"日期格式值错误，尝试另一种格式。{row['date']}",
                         e,
                     )
                     date = datetime.strptime(row["date"], "%d/%m/%Y")
@@ -73,11 +85,11 @@ class TwitterExtractor:
 
             self._save_to_json(row, filename=f"{cur_filename}.json")
             logger.info(
-                f"Saving tweets...\n{row['date']},  {row['author_name']} -- {row['text'][:50]}...\n\n"
+                f"保存推文...\n{row['date']},  {row['author_name']} -- {row['text'][:50]}...\n\n"
             )
             self._delete_first_tweet()
 
-        # Save to Excel
+        # 保存到Excel
         self._save_to_excel(
             json_filename=f"{cur_filename}.json", output_filename=f"{cur_filename}.xlsx"
         )
@@ -309,10 +321,10 @@ class TwitterExtractor:
 if __name__ == "__main__":
     scraper = TwitterExtractor()
     scraper.fetch_tweets(
-        "https://twitter.com/elonmusk/likes",
-        start_date="2024-03-01",
-        end_date="2024-03-02",
-    )  # YYYY-MM-DD format
+        TWITTER_URL,
+        start_date=START_DATE,
+        end_date=END_DATE,
+    )  # YYYY-MM-DD格式
 
-    # If you just want to export to Excel, you can use the following line
+    # 如果你只想导出到Excel，可以使用以下行
     # scraper._save_to_excel(json_filename="tweets_2024-02-01_14-30-00.json", output_filename="tweets_2024-02-01_14-30-00.xlsx")
