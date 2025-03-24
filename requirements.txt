@@ -5,3 +5,4 @@ plotly-calplot
 selenium
 tenacity
 python-dotenv
+openpyxl
